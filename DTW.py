@@ -20,18 +20,21 @@ class DTW():
 
     # Dynamic Time Warping distance between sequence S1 and S2
     def _distance(self, s1, s2):
-        dtw = np.zeros(shape=(len(s1),len(s2)))
-        w = max(self.window, abs(len(s1) - len(s2)))
+        s1_shrink = self.__shrink_sequence(s1)
+        s2_shrink = self.__shrink_sequence(s2)
 
-        for i in range(0, len(s1)):
-            for j in range(max(1, i-w), min(len(s2), i+w)):
+        dtw = np.zeros(shape=(len(s1_shrink),len(s2_shrink)))
+        w = max(self.window, abs(len(s1_shrink) - len(s2_shrink)))
+
+        for i in range(0, len(s1_shrink)):
+            for j in range(max(1, i-w), min(len(s2_shrink), i+w)):
                 dtw[i, j] = np.Inf
 
         dtw[0, 0] = 0
 
-        for i in range(1, len(s1)):
-            for j in range(max(1, i-w), min(len(s2), i+w)):
-                cost = np.linalg.norm(s1[i,:3] - s2[j,:3])
+        for i in range(1, len(s1_shrink)):
+            for j in range(max(1, i-w), min(len(s2_shrink), i+w)):
+                cost = np.linalg.norm(s1_shrink[i,:3] - s2_shrink[j,:3])
                 dtw[i,j] = cost + min(dtw[i-1, j], dtw[i, j-1], dtw[i-1, j-1])
         return dtw[-1, -1]
 
@@ -57,6 +60,12 @@ class DTW():
         sorted_labels = np.array([[self.labels[sorted_idx[j,i]] for i in range(len(X))] for j in range(self.n_neighbors)])
         vote = [np.bincount(sorted_labels[:, i]) for i in range(len(X))]
         return [np.argmax(vote[i]) for i in range(len(X))]
+
+    def __shrink_sequence(self, X):
+        tmp = []
+        for i in range(0, len(X) - (len(X) % 2), 2):
+            tmp.append((X[i] + X[i+1]) / 2)
+        return np.array(tmp)
 
 
 # Read specific filename from specified domain
@@ -108,7 +117,7 @@ print(X_train.shape)
 
 print("training data class:", y_train)
 
-window_size = 5
+window_size = 10
 print(len(X_train), len(X_test))
 
 model = DTW(3, window_size)
