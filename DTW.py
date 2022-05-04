@@ -6,9 +6,11 @@ class DTW():
     n_neighbors = np.Inf
     X = None
     labels = None
+    window = np.Inf
     
-    def __init__(self, n_neighbors=5):
+    def __init__(self, n_neighbors=5, window_size=100):
         self.n_neighbors=n_neighbors
+        self.window = window_size
         
     
     def fit(self, X, y):
@@ -19,21 +21,22 @@ class DTW():
     # Dynamic Time Warping distance between sequence S1 and S2
     def _distance(self, s1, s2):
         dtw = np.zeros(shape=(len(s1),len(s2)))
+        w = max(self.window, abs(len(s1) - len(s2)))
 
         for i in range(0, len(s1)):
-            for j in range(0, len(s2)):
+            for j in range(max(1, i-w), min(len(s2), i+w)):
                 dtw[i, j] = np.Inf
 
         dtw[0, 0] = 0
 
         for i in range(1, len(s1)):
-            for j in range(1, len(s2)):
+            for j in range(max(1, i-w), min(len(s2), i+w)):
                 cost = np.linalg.norm(s1[i,:3] - s2[j,:3])
                 dtw[i,j] = cost + min(dtw[i-1, j], dtw[i, j-1], dtw[i-1, j-1])
         return dtw[-1, -1]
 
     def _distance_matrix(self, ms1, ms2):
-        D = np.zeros((len(ms1), len(ms2)))      # TODO: Optimize memory usage by storing only upper triangle
+        D = np.zeros((len(ms1), len(ms2)))
         
         max_count = len(ms1) * len(ms2)
         count = 0
@@ -41,7 +44,8 @@ class DTW():
             for j in range(i + 1, len(ms2)):
                 D[i,j] = self._distance(ms1[i], ms2[j])
                 count += 1
-                print("{}/{}".format(count, max_count))
+                if (count % 1000 == 0):
+                    print("{}/{}".format(count, max_count))
         return D
 
     def predict(self, X):
@@ -98,11 +102,15 @@ def resample(sample, new_size):
 
 X,y =read_files(1)
 
-X_train = X[:50]
-X_test = X[50:]
-y_train = y[50:60]
-y_test = y[50:60]
+X_train = X[:800]
+X_test = X[800:]
+y_train = y[:800]
+y_test = y[800:]
 
-model = DTW(5)
+window_size = 50
+
+model = DTW(5, window_size)
 model.fit(X_train, y_train)
 model.predict(X_test)
+print("DOne")
+#%%
