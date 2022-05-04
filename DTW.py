@@ -41,7 +41,7 @@ class DTW():
         max_count = len(ms1) * len(ms2)
         count = 0
         for i in range(len(ms1)):
-            for j in range(i + 1, len(ms2)):
+            for j in range(len(ms2)):
                 D[i,j] = self._distance(ms1[i], ms2[j])
                 count += 1
                 if (count % 1000 == 0):
@@ -51,12 +51,12 @@ class DTW():
     def predict(self, X):
         # Compute distance between train and test
         D = self._distance_matrix(self.X, X)
-        sorted_idx = np.unravel_index((-D).argsort()[:self.n_neighbors], D.shape)
-        sorted_labels = [self.labels[i] for (i,_) in sorted_idx]
-        
-        print(sorted_labels)
+        sorted_idx = (-D).argsort(axis=0)[:self.n_neighbors]
 
-
+        # label retrieval
+        sorted_labels = np.array([[self.labels[sorted_idx[j,i]] for i in range(len(X))] for j in range(self.n_neighbors)])
+        vote = [np.bincount(sorted_labels[:, i]) for i in range(len(X))]
+        return [np.argmax(vote[i]) for i in range(len(X))]
 
 
 # Read specific filename from specified domain
@@ -65,7 +65,7 @@ def read_files(domain):
     X = []
     y = []
 
-    for i in range(1, 1000):
+    for i in range(1, 1001):
         path = "data/Domain0{}/{}.txt".format(domain, i)
 
         with open(path, "r") as file:
@@ -84,33 +84,36 @@ def read_files(domain):
     
 
 # Resample the measurement to standardized batch
-def resample(sample, new_size):
-    step = len(sample) / (new_size-1)
-    D = 0
-    pt1 = sample[0, 0:3]
+def train_test_split(X, y, train_ratio):
+    cutting_pt = int(train_ratio*10)
+    X_train, y_train, X_test, y_test = [], [], [], []
 
-    for i in range(1, 2):
-        pt2 = sample[i,0:3]
-        dist = np.linalg.norm(pt1 - pt2)
-        
-        if D+dist > step:
-            pt_mid = pt1 + ((step - D)/dist) * pt_1
-        else:
-            D += dist
-        pt1 = pt2
+    for i in range(0, 1000, 10):
+        sampling = np.arange(10)
+        np.random.shuffle(sampling)
+
+        for j in range(0,cutting_pt):
+            X_train.append(X[i+sampling[j]])
+            y_train.append(y[i+sampling[j]])
+        for j in range(cutting_pt,10):
+            X_test.append(X[i + sampling[j]])
+            y_test.append(y[i + sampling[j]])
+    return np.array(X_train, dtype=object), np.array(y_train, dtype=object), np.array(X_test, dtype=object), np.array(y_test, dtype=object)
 
 
 X,y =read_files(1)
 
-X_train = X[:800]
-X_test = X[800:]
-y_train = y[:800]
-y_test = y[800:]
+X_train, y_train, X_test, y_test = train_test_split(X, y, 0.7)
+print(X_train.shape)
 
-window_size = 50
+print("training data class:", y_train)
 
-model = DTW(5, window_size)
+window_size = 5
+print(len(X_train), len(X_test))
+
+model = DTW(3, window_size)
 model.fit(X_train, y_train)
-model.predict(X_test)
-print("DOne")
-#%%
+pred = model.predict(X_test)
+print("prediction:", pred)
+print("vs")
+print("real values:", y_test)
