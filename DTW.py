@@ -18,14 +18,14 @@ class DTW(BaseEstimator, ClassifierMixin):
     n_neighbors = np.Inf
     X = None
     labels = None
-    window = np.Inf
+    window_size = np.Inf
     fitted = False
     shrinkage = True
 
     def __init__(self, n_neighbors=5, window_size=100, shrinkage=True):
         self.shrinkage = shrinkage
         self.n_neighbors = n_neighbors
-        self.window = window_size
+        self.window_size = window_size
 
     def fit(self, X, y, shrinkage=True):
         self.fitted = True
@@ -39,7 +39,7 @@ class DTW(BaseEstimator, ClassifierMixin):
             s2 = shrink_sequence(s2)
 
         dtw = np.zeros(shape=(len(s1), len(s2)))
-        w = max(self.window, abs(len(s1) - len(s2)))
+        w = max(self.window_size, abs(len(s1) - len(s2)))
 
         for i in range(0, len(s1)):
             for j in range(max(1, i - w), min(len(s2), i + w)):
@@ -89,12 +89,21 @@ class DTW(BaseEstimator, ClassifierMixin):
 #       Launch      #
 #####################
 if __name__ == '__main__':
+    # Data importing
     X, y = utils.read_files(1)
-
     X_train, y_train, X_test, y_test = utils.train_test_split(X, y, 0.7)
 
-    window_size = 10
+    # Hyper-parameters tuning
+    param_grid = [{
+        "n_neighbors" : [3,4,5,7,10],
+    }]
+    model = DTW(window_size=10)
+    search = GridSearchCV(model, param_grid=param_grid, cv=5, verbose=4)
+    search.fit(X_train, y_train)
 
-    model = DTW(3, window_size)
-    model.fit(X_train, y_train)
-    print(model.score(X_test, y_test))
+    # Best model
+    best_params = search.best_params_
+    print(best_params)
+    best_model = DTW(best_params)
+    best_model.fit(X_train, y_train)
+    print("accuracy on test datatset: {}".format(best_model.score(X_test, y_test)))
