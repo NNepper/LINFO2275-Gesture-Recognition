@@ -29,16 +29,34 @@ def rejection_threshold(X):
     return np.linalg.norm(X_pca[0].max() - X_pca[0].min())
 
 
-def plot_facet(X):
+def plot_facet(X1, X2):
     f, (ax1, ax2, ax3) = plt.subplots(3, sharex=True, sharey=True)
-    ax1.plot(X.index, X["x"])
+    index1 = np.array(X1.index)
+    index2 = np.array(X2.index)
+
     ax1.set_title('Sequence in [x,y,z]')
-    ax2.plot(X.index, X["y"])
-    ax3.plot(X.index, X["z"])
+
+    ax1.plot(index1, X1["x"], "tab:red")
+    ax1.plot(index2, X2["x"], "tab:orange")
+    ax2.plot(index1, X1["y"], 'tab:red"')
+    ax2.plot(index2, X2["y"], "tab:orange")
+    ax3.plot(index1, X1["z"], "tab:red")
+    ax3.plot(index2, X2["z"], "tab:orange")
+
     # Fine-tune figure; make subplots close to each other and hide x ticks for
     # all but bottom plot.
     f.subplots_adjust(hspace=0)
     plt.show()
+
+
+def dataframe_conversion(X):
+    X_new = []
+    for i in range(len(X)):
+        X[i] = X[i][3:-3]
+        df = pd.DataFrame(X[i], columns=["x", "y", "z", "timestamp"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        X_new.append(df)
+    return X_new
 
 
 class SVM(BaseEstimator, ClassifierMixin):
@@ -49,11 +67,10 @@ class SVM(BaseEstimator, ClassifierMixin):
 
     def __init__(self, resampling_size=64, threshold=0.06):
         self.resampling_size = resampling_size
-        self.conv_treshold = threshold
+        self.conv_threshold = threshold
 
     def fit(self, X, y):
-        X_pre = self._preprocessing(X)
-        self.X = self._feature_creation(X_pre)
+        self.X = self._feature_creation(self._preprocessing(dataframe_conversion(X)))
         self.labels = y
 
     def predict(self, X):
@@ -64,36 +81,29 @@ class SVM(BaseEstimator, ClassifierMixin):
         return accuracy_score(y_pred, y)
 
     def _preprocessing(self, X):
-        X_pre = []
-        # Remove first and last hooking
-        for i in range(len(X)):
-            X[i] = X[i][3:-3]
-            df = pd.DataFrame(X[i], columns=["x", "y", "z", "timestamp"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            X_pre.append(df)
 
         # Resample in constant step (N=64)
         for i in range(len(X)):
-            X_pre[i] = resample(X_pre[i], self.resampling_size)
+            X[i] = resample(X[i], self.resampling_size)
 
         # Remove outlier with threshold
-        for i in range(len(X_pre)):
+        for i in range(len(X)):
             # Determine rejection threshold
-            threshold = 2 * rejection_threshold(X_pre[i][["x", "y", "z"]])
+            threshold = 2 * rejection_threshold(X[i][["x", "y", "z"]])
             to_drop = []
 
             # Outlier rejection
             for col in ["x", "y", "z"]:
-                tmp_conv = gaussian_filter1d(X_pre[i][col], 5)
-                tmp_base = list(X_pre[i][col])
-                for j in range(len(X_pre[i])):
+                tmp_conv = gaussian_filter1d(X[i][col], 5)
+                tmp_base = list(X[i][col])
+                for j in range(len(X[i])):
                     if np.abs(tmp_base[j] - tmp_conv[j]) > threshold:
                         to_drop.append(j)
             if len(to_drop) > 0:
-                X_pre[i] = X_pre[i].drop(labels=[X_pre[i].index[idx] for idx in set(to_drop)], axis=0)
-                X_pre[i] = resample(X_pre[i], self.resampling_size)
+                X[i] = X[i].drop(labels=[X[i].index[idx] for idx in set(to_drop)], axis=0)
+                X[i] = resample(X[i], self.resampling_size)
 
-        return X_pre
+        return X
 
     def _feature_creation(self, X):
         # TODO: feature creation for SVM classifier
