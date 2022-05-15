@@ -1,6 +1,7 @@
 import utils
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.model_selection import GridSearchCV
+from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
@@ -8,23 +9,36 @@ import numpy as np
 import pandas as pd
 
 
-def resample(X, n_new=64):
-    X_res = []
-    for df in X:
-        n_old, m = df.values.shape
-        mat_old = df.values
-        mat_new = np.zeros((n_new, m))
-        x_old = np.linspace(df.index.min(), df.index.max(), n_old)
-        x_new = np.linspace(df.index.min(), df.index.max(), n_new)
+def resample(df, n_new=64):
+    n_old, m = df.values.shape
+    mat_old = df.values
+    mat_new = np.zeros((n_new, m))
+    x_old = np.linspace(df.index.min(), df.index.max(), n_old)
+    x_new = np.linspace(df.index.min(), df.index.max(), n_new)
 
-        for j in range(m-1):
-            y_old = np.array(mat_old[:, j], dtype=float)
-            y_new = np.interp(x_new, x_old, y_old)
-            mat_new[:, j] = y_new
+    for j in range(m - 1):
+        y_old = np.array(mat_old[:, j], dtype=float)
+        y_new = np.interp(x_new, x_old, y_old)
+        mat_new[:, j] = y_new
 
-        X_res.append(pd.DataFrame(mat_new, index=x_new, columns=df.columns))
-    return X_res
+    return pd.DataFrame(mat_new, index=x_new, columns=df.columns)
 
+
+def rejection_threshold(X):
+    X_pca = PCA().fit_transform(X)
+    return np.linalg.norm(X_pca[0].max() - X_pca[0].min())
+
+
+def plot_facet(X):
+    f, (ax1, ax2, ax3) = plt.subplots(3, sharex=True, sharey=True)
+    ax1.plot(X.index, X["x"])
+    ax1.set_title('Sequence in [x,y,z]')
+    ax2.plot(X.index, X["y"])
+    ax3.plot(X.index, X["z"])
+    # Fine-tune figure; make subplots close to each other and hide x ticks for
+    # all but bottom plot.
+    f.subplots_adjust(hspace=0)
+    plt.show()
 
 
 class SVM(BaseEstimator, ClassifierMixin):
@@ -60,16 +74,23 @@ class SVM(BaseEstimator, ClassifierMixin):
 
         # Resample in constant step (N=64)
         for i in range(len(X)):
-            X_pre[i] = resample(X_pre, self.resampling_size)
+            X_pre[i] = resample(X_pre[i], self.resampling_size)
 
         # Remove outlier with threshold
         for i in range(len(X_pre)):
+            # Determine rejection threshold
+            threshold = 2 * rejection_threshold(X_pre[i][["x", "y", "z"]])
+            to_drop = []
+
+            # Outlier rejection
             for col in ["x", "y", "z"]:
-                tmp = gaussian_filter1d(X[i][col], 5)
-                for j in range(len(X[i])):
-                    if np.abs(X_pre[i][col][j] - tmp[j]) > self.conv_treshold:
-                        X_pre[i].drop(index=j)
-            if len(X_pre[i]) != self.resampling_size:
+                tmp_conv = gaussian_filter1d(X_pre[i][col], 5)
+                tmp_base = list(X_pre[i][col])
+                for j in range(len(X_pre[i])):
+                    if np.abs(tmp_base[j] - tmp_conv[j]) > threshold:
+                        to_drop.append(j)
+            if len(to_drop) > 0:
+                X_pre[i] = X_pre[i].drop(labels=[X_pre[i].index[idx] for idx in set(to_drop)], axis=0)
                 X_pre[i] = resample(X_pre[i], self.resampling_size)
 
         return X_pre
