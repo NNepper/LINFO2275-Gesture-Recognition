@@ -20,8 +20,9 @@ def resample(df, n_new=64):
         y_old = np.array(mat_old[:, j], dtype=float)
         y_new = np.interp(x_new, x_old, y_old)
         mat_new[:, j] = y_new
+    mat_new[:, m-1] = x_new
 
-    return pd.DataFrame(mat_new, index=x_new, columns=df.columns)
+    return pd.DataFrame(mat_new, columns=df.columns)
 
 
 def rejection_threshold(X):
@@ -65,7 +66,7 @@ class SVM(BaseEstimator, ClassifierMixin):
     resampling_size = None
     conv_threshold = None
 
-    def __init__(self, resampling_size=64, threshold=0.06):
+    def __init__(self, resampling_size=64, threshold=2):
         self.resampling_size = resampling_size
         self.conv_threshold = threshold
 
@@ -89,7 +90,7 @@ class SVM(BaseEstimator, ClassifierMixin):
         # Remove outlier with threshold
         for i in range(len(X)):
             # Determine rejection threshold
-            threshold = 2 * rejection_threshold(X[i][["x", "y", "z"]])
+            threshold = self.conv_threshold * rejection_threshold(X[i][["x", "y", "z"]])
             to_drop = []
 
             # Outlier rejection
@@ -103,6 +104,17 @@ class SVM(BaseEstimator, ClassifierMixin):
                 X[i] = X[i].drop(labels=[X[i].index[idx] for idx in set(to_drop)], axis=0)
                 X[i] = resample(X[i], self.resampling_size)
 
+        # Scale path-length to unity
+        for i in range(len(X)):
+            # Compute sequence length
+            length = 0.0
+            for j in range(1, len(X[i])):
+                vec1 = np.array(list(X[i].loc[j-1][["x", "y", "z"]]))
+                vec2 = np.array(list(X[i].loc[j][["x", "y", "z"]]))
+                length += np.linalg.norm(vec2-vec1)
+            X[i][["x", "y", "z"]] /= length
+
+        print("Preprocessing Done!")
         return X
 
     def _feature_creation(self, X):
@@ -118,4 +130,3 @@ if __name__ == '__main__':
 
     model = SVM()
     model.fit(X_train, y_train)
-    print(model.score(X_test, y_test))
