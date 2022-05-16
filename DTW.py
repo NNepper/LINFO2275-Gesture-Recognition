@@ -80,9 +80,17 @@ class DTW(BaseEstimator, ClassifierMixin):
     def score(self, X, y, sample_weight=None):
         if self.fitted:
             y_pred = self.predict(X)
-            return accuracy_score(y, y_pred)
+            count = 0
+            for i in range(len(y_pred)):
+                if y[i] == y_pred[i]:
+                    count += 1
+            return count / len(y_pred)
         else:
             raise sklearn.exceptions.NotFittedError
+
+    def set_params(self, **params):
+        for param, val in params.items():
+            setattr(self, param, val)
 
 
 #####################
@@ -91,19 +99,17 @@ class DTW(BaseEstimator, ClassifierMixin):
 if __name__ == '__main__':
     # Data importing
     X, y = utils.read_files(1)
-    X_train, y_train, X_test, y_test = utils.train_test_split(X, y, 0.7)
+    X_train, y_train, X_test, y_test = utils.train_test_split(X, y)
 
     # Hyper-parameters tuning
     param_grid = [{
-        "n_neighbors" : [3,4,5,7,10],
+        "n_neighbors": [3, 4, 5, 7, 10],
     }]
     model = DTW(window_size=10)
-    search = GridSearchCV(model, param_grid=param_grid, cv=5, verbose=4)
-    search.fit(X_train, y_train)
-
-    # Best model
-    best_params = search.best_params_
-    print(best_params)
-    best_model = DTW(best_params)
-    best_model.fit(X_train, y_train)
-    print("accuracy on test datatset: {}".format(best_model.score(X_test, y_test)))
+    cv = utils.LeaveOneOut()
+    for n_neighbor in [3, 4, 5, 7, 10]:
+        score = []
+        for train_idx, val_idx in cv.split(X_train, y_train):
+            model.fit(np.take(X_train, train_idx), np.take(y_train, train_idx))
+            score.append(model.score(np.take(X_train, val_idx), np.take(y_train, val_idx)))
+        print("mean accuracy score for n:%i = %f" % n_neighbor, np.array(score).mean())

@@ -5,6 +5,9 @@
 import numpy as np
 
 # Read specific filename from specified domain
+import sklearn.base
+
+
 def read_files(domain):
     X = []
     y = []
@@ -17,6 +20,7 @@ def read_files(domain):
 
             # Store class
             clas = int(lines[1].split()[-1].rstrip("\n")) - 1
+
             y.append(clas)
 
             # Store Sequence
@@ -27,20 +31,35 @@ def read_files(domain):
     return X, y
 
 
-# Resample the measurement to standardized batch
-def train_test_split(X, y, train_ratio):
-    cutting_pt = int(train_ratio * 10)
+# Split Dataset in Training and Testing set
+def train_test_split(X, y):
     X_train, y_train, X_test, y_test = [], [], [], []
+    for i in range(len(X) - 100):
+        X_train.append(X[i])
+        y_train.append(y[i])
+    for i in range(len(X) - 100, len(X)):
+        X_test.append(X[i])
+        y_test.append(y[i])
+    return np.array(X_train, dtype=object), np.array(y_train, dtype=object), \
+           np.array(X_test, dtype=object), np.array(y_test, dtype=object)
 
-    for i in range(0, 1000, 10):
-        sampling = np.arange(10)
-        np.random.shuffle(sampling)
 
-        for j in range(0, cutting_pt):
-            X_train.append(X[i + sampling[j]])
-            y_train.append(y[i + sampling[j]])
-        for j in range(cutting_pt, 10):
-            X_test.append(X[i + sampling[j]])
-            y_test.append(y[i + sampling[j]])
-    return np.array(X_train, dtype=object), np.array(y_train, dtype=object), np.array(X_test, dtype=object), np.array(
-        y_test, dtype=object)
+# Leave-One-Out Cross-Validation
+class LeaveOneOut:
+
+    def __init__(self):
+        return
+
+    def split(self, X, y, groups=None):
+        for i in range(100, 1000, 100):  # len(x) folds
+            right_train = np.arange(i, len(X))
+            if i > 100:
+                left_train = np.arange(0, i - 100)
+            else:
+                left_train = np.array([])
+            train_idx = np.concatenate([left_train, right_train])
+            val_idx = np.arange(i - 100, i)
+            yield np.array(train_idx, dtype=int), np.array(val_idx, dtype=int)
+
+    def get_n_splits(self, X, y, groups=None):
+        return 10
