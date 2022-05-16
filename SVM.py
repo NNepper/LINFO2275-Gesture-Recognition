@@ -1,29 +1,19 @@
 import utils
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
 from scipy.ndimage import gaussian_filter1d
+import scipy.signal as signal
+import scipy.spatial.distance as distance
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import math
 
 
-def resample(df, n_new=64):
-    n_old, m = df.values.shape
-    mat_old = df.values
-    mat_new = np.zeros((n_new, m))
-    x_old = np.linspace(df.index.min(), df.index.max(), n_old)
-    x_new = np.linspace(df.index.min(), df.index.max(), n_new)
-
-    for j in range(m - 1):
-        y_old = np.array(mat_old[:, j], dtype=float)
-        y_new = np.interp(x_new, x_old, y_old)
-        mat_new[:, j] = y_new
-    mat_new[:, m-1] = x_new
-
-    return pd.DataFrame(mat_new, columns=df.columns)
-
+###############################
+### Preprocessing functions ###
+###############################
 
 def rejection_threshold(X):
     X_pca = PCA().fit_transform(X)
@@ -60,18 +50,81 @@ def dataframe_conversion(X):
     return X_new
 
 
+def resampling(X, n_new):
+    X_res = np.zeros(shape=(n_new, 4))
+    X_res[:, 3] = np.linspace(X[3].min(), X[3].max(), n_new)
+    for i in range(3):
+        X_res[:, i] = signal.resample(X[:, i], n_new).T
+    return X_res
+
+
+##################################
+### Feature creation functions ###
+##################################
+
+def speed_feature(X):
+    X_speed = []
+    for seq in X:
+        length = [0.0]
+        for j in range(1, len(seq)):
+            vec1 = seq[j, :][0:2]
+            vec2 = seq[j - 1, :]
+            length[j] = np.linalg.norm(vec2 - vec1) + length[j - 1]
+
+        speed = []
+        for j in range(1, len(seq) - 1):
+            speed.append(
+                (length[j + 1] - length[j - 1]) / (seq.loc[j + 1] - seq.loc[j - 1]))  # Compute speed at point j
+        speed_smoothed = gaussian_filter1d(speed, 1)
+        features = np.array([
+            np.std(speed_smoothed)/np.mean(speed_smoothed),
+            np.percentile(speed_smoothed, q=0.9)/np.mean(speed_smoothed),
+            np.percentile(speed_smoothed, q=0.1)/np.mean(speed_smoothed)
+        ])
+        X_speed.append(features)
+    return X_speed
+
+def curvature_feature(X):
+    X_curv = []
+    for seq in X:
+        curv = []
+        for i in range(len(seq)):
+            # Compute sequence length
+            for j in range(1, len(X[i])):
+                vec1 = X[i][j - 1, :][0:2]
+                vec2 = X[i][j, :][0:2]
+                curv.append(np.linalg.norm(vec1, vec2) / math.acos(np.dot(vec1, vec2)))
+        curv_smoothed = gaussian_filter1d(curv, 1)
+        features = np.array([
+            np.mean(curv_smoothed),
+            np.std(curv_smoothed),
+            np.quantile(curv_smoothed, q=0.9)
+        ])
+        X_curv.append(features)
+    return X_curv
+
+def distance_feature(X):
+    X_dist = []
+    for seq in X:
+        dist = np.zeros(shape=(len(seq), len(seq)))
+        for i in range(len(seq)):
+            for j in range(len(seq)):
+
+
+
+
 class SVM(BaseEstimator, ClassifierMixin):
     X = None
     labels = None
     resampling_size = None
     conv_threshold = None
 
-    def __init__(self, resampling_size=64, threshold=2):
+    def __init__(self, resampling_size=72, threshold=0.16):
         self.resampling_size = resampling_size
         self.conv_threshold = threshold
 
     def fit(self, X, y):
-        self.X = self._feature_creation(self._preprocessing(dataframe_conversion(X)))
+        self.X = self._feature_creation(self._preprocessing(X))
         self.labels = y
 
     def predict(self, X):
@@ -85,34 +138,34 @@ class SVM(BaseEstimator, ClassifierMixin):
 
         # Resample in constant step (N=64)
         for i in range(len(X)):
-            X[i] = resample(X[i], self.resampling_size)
+            X[i] = resampling(X[i], self.resampling_size)
 
         # Remove outlier with threshold
         for i in range(len(X)):
             # Determine rejection threshold
-            threshold = self.conv_threshold * rejection_threshold(X[i][["x", "y", "z"]])
+            threshold = self.conv_threshold * rejection_threshold(X[i][0:2])
             to_drop = []
 
             # Outlier rejection
-            for col in ["x", "y", "z"]:
-                tmp_conv = gaussian_filter1d(X[i][col], 5)
-                tmp_base = list(X[i][col])
+            for col in range(3):
+                tmp_conv = gaussian_filter1d(X[i][:, col], sigma=5)
+                tmp_base = list(X[i][:, col])
                 for j in range(len(X[i])):
-                    if np.abs(tmp_base[j] - tmp_conv[j]) > threshold:
+                    if distance.euclidean(tmp_base, tmp_conv) > threshold:
                         to_drop.append(j)
             if len(to_drop) > 0:
-                X[i] = X[i].drop(labels=[X[i].index[idx] for idx in set(to_drop)], axis=0)
-                X[i] = resample(X[i], self.resampling_size)
+                X[i] = np.delete(X[i], list(set(to_drop)), axis=0)
+                X[i] = resampling(X[i], self.resampling_size)
 
         # Scale path-length to unity
         for i in range(len(X)):
             # Compute sequence length
             length = 0.0
             for j in range(1, len(X[i])):
-                vec1 = np.array(list(X[i].loc[j-1][["x", "y", "z"]]))
-                vec2 = np.array(list(X[i].loc[j][["x", "y", "z"]]))
-                length += np.linalg.norm(vec2-vec1)
-            X[i][["x", "y", "z"]] /= length
+                vec1 = X[i][j - 1, :][0:2]
+                vec2 = X[i][j, :][0:2]
+                length += np.linalg.norm(vec2 - vec1)
+            X[i][0:2] /= length
 
         print("Preprocessing Done!")
         return X
@@ -120,13 +173,24 @@ class SVM(BaseEstimator, ClassifierMixin):
     def _feature_creation(self, X):
         # TODO: feature creation for SVM classifier
 
+        # TODO: Speed feature (f1,f2,f3)
+        for seq in range(len(X)):
+            length = 0.0
+
+        # TODO:
         return X  # Return matrix of new features
 
 
 if __name__ == '__main__':
-    X, y = utils.read_files(domain=1)
+    # Data importing
+    X, y = utils.read_files(1)
+    X_train, y_train, X_test, y_test = utils.train_test_split(X, y)
 
-    X_train, y_train, X_test, y_test = utils.train_test_split(X, y, 0.7)
-
+    # Hyper-parameters tuning
     model = SVM()
-    model.fit(X_train, y_train)
+    cv = utils.LeaveOneOut()
+    score = []
+    for train_idx, val_idx in cv.split(X_train, y_train):
+        model.fit(np.take(X_train, train_idx), np.take(y_train, train_idx))
+        score.append(model.score(np.take(X_train, val_idx), np.take(y_train, val_idx)))
+    print("mean accuracy score = %f" % np.array(score).mean())
