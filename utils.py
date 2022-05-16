@@ -5,8 +5,7 @@
 import numpy as np
 
 # Read specific filename from specified domain
-import sklearn.base
-
+import scipy.signal as signal
 
 def read_files(domain):
     X = []
@@ -43,6 +42,14 @@ def train_test_split(X, y):
     return np.array(X_train, dtype=object), np.array(y_train, dtype=object), \
            np.array(X_test, dtype=object), np.array(y_test, dtype=object)
 
+
+# Resampling function
+def resampling(X, n_new):
+    X_res = np.zeros(shape=(n_new, 4))
+    X_res[:, 3] = np.linspace(X[3].min(), X[3].max(), n_new)
+    for i in range(3):
+        X_res[:, i] = signal.resample(X[:, i], n_new).T
+    return X_res
 
 # Leave-One-Out Cross-Validation
 class LeaveOneOut:

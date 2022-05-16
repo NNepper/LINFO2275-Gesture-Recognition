@@ -3,7 +3,6 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
 from scipy.ndimage import gaussian_filter1d
-import scipy.signal as signal
 import scipy.spatial.distance as distance
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,12 +49,7 @@ def dataframe_conversion(X):
     return X_new
 
 
-def resampling(X, n_new):
-    X_res = np.zeros(shape=(n_new, 4))
-    X_res[:, 3] = np.linspace(X[3].min(), X[3].max(), n_new)
-    for i in range(3):
-        X_res[:, i] = signal.resample(X[:, i], n_new).T
-    return X_res
+
 
 
 ##################################
@@ -138,7 +132,7 @@ class SVM(BaseEstimator, ClassifierMixin):
 
         # Resample in constant step (N=64)
         for i in range(len(X)):
-            X[i] = resampling(X[i], self.resampling_size)
+            X[i] = utils.resampling(X[i], self.resampling_size)
 
         # Remove outlier with threshold
         for i in range(len(X)):
@@ -155,7 +149,7 @@ class SVM(BaseEstimator, ClassifierMixin):
                         to_drop.append(j)
             if len(to_drop) > 0:
                 X[i] = np.delete(X[i], list(set(to_drop)), axis=0)
-                X[i] = resampling(X[i], self.resampling_size)
+                X[i] = utils.resampling(X[i], self.resampling_size)
 
         # Scale path-length to unity
         for i in range(len(X)):

@@ -35,8 +35,8 @@ class DTW(BaseEstimator, ClassifierMixin):
     # Dynamic Time Warping distance between sequence S1 and S2
     def _distance(self, s1, s2):
         if self.shrinkage:
-            s1 = shrink_sequence(s1)
-            s2 = shrink_sequence(s2)
+            s1 = utils.resampling(s1, 64)
+            s2 = utils.resampling(s2, 64)
 
         dtw = np.zeros(shape=(len(s1), len(s2)))
         w = max(self.window_size, abs(len(s1) - len(s2)))
@@ -56,14 +56,9 @@ class DTW(BaseEstimator, ClassifierMixin):
     def _distance_matrix(self, ms1, ms2):
         D = np.zeros((len(ms1), len(ms2)))
 
-        max_count = len(ms1) * len(ms2)
-        count = 0
         for i in range(len(ms1)):
             for j in range(len(ms2)):
                 D[i, j] = self._distance(ms1[i], ms2[j])
-                count += 1
-                if count % 1000 == 0:
-                    print("{}/{}".format(count, max_count))
         return D
 
     def predict(self, X):
@@ -105,11 +100,14 @@ if __name__ == '__main__':
     param_grid = [{
         "n_neighbors": [3, 4, 5, 7, 10],
     }]
-    model = DTW(window_size=10)
+    model = DTW(window_size=10, shrinkage=True)
     cv = utils.LeaveOneOut()
     for n_neighbor in [3, 4, 5, 7, 10]:
         score = []
+        count = 0
         for train_idx, val_idx in cv.split(X_train, y_train):
             model.fit(np.take(X_train, train_idx), np.take(y_train, train_idx))
             score.append(model.score(np.take(X_train, val_idx), np.take(y_train, val_idx)))
-        print("mean accuracy score for n:%i = %f" % n_neighbor, np.array(score).mean())
+            print("iteration n°{} for n_neighbors={} gave score:{}".format(count, n_neighbor, score[-1]))
+            count += 1
+        print("mean accuracy score for n:{} = {}".format(n_neighbor, np.array(score).mean()))
