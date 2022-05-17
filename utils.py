@@ -1,17 +1,15 @@
+import numpy as np
+import scipy.interpolate as interp
+
+
 #######################
 ### Utils functions ###
 #######################
 
-import numpy as np
-
 # Read specific filename from specified domain
-import scipy.interpolate as interp
-
-
 def read_files(domain):
     X = []
     y = []
-
     for i in range(1, 1001):
         path = "data/Domain0{}/{}.txt".format(domain, i)
 

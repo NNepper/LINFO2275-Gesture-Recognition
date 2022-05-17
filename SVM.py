@@ -2,41 +2,14 @@ import copy
 
 import utils
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 from scipy.ndimage import gaussian_filter1d
 import scipy.spatial.distance as distance
-import numpy as np
 import math
 import copy
-
-import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 import numpy as np
-
-
-#########
-# Plot
-########
-
-def plot_facet(X1, X2=None, title=""):
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    ax.set_title("Comparison between two sequences")
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-
-    ax.plot3D(xs=np.asarray(X1[:, 0]).squeeze(), ys=np.asarray(X1[:, 1]).squeeze(), zs=np.asarray(X1[:, 2]).squeeze(),
-              c='red')
-    if X2 is not None:
-        ax.plot3D(xs=np.asarray(X2[:, 0]).squeeze(), ys=np.asarray(X2[:, 1]).squeeze(),
-                  zs=np.asarray(X2[:, 2]).squeeze(),
-                  c='blue')
-    plt.show()
 
 
 ###############################
@@ -299,15 +272,11 @@ if __name__ == '__main__':
     for thresh in thresholds:
         cv = utils.LeaveOneOut()
         score = []
-        count = 0
         for train_idx, val_idx in cv.split(X, y):
             model = SVM(C=1, gamma=1, kernel="rbf", threshold=thresh)
             model.fit(np.take(X, train_idx), np.take(y, train_idx))
             y_pred = model.predict(np.take(X, val_idx))
             score.append(utils.score(y_pred, np.take(y, val_idx)))
-            print("iteration n°{} for param:{} gave score:{}".format(count, thresh, score[-1]))
-            count += 1
-
         score_mean = np.array(score).mean()
         if score_mean > best_score:
             best_score = score_mean

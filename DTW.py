@@ -83,20 +83,13 @@ if __name__ == '__main__':
     X, y = utils.read_files(1)
 
     # Hyper-parameters tuning
-    param_grid = [{
-        "n_neighbors": [3, 4, 5, 7, 10],
-    }]
     model = DTW(window_size=10, shrinkage=True)
     cv = utils.LeaveOneOut()
-    for n_neighbor in [20]:
+    for window in [20,30,50]:
         score = []
-        count = 0
         for train_idx, val_idx in cv.split(X, y):
-            model = DTW(n_neighbors=n_neighbor, window_size=10, shrinkage=True)
-
+            model = DTW(n_neighbors=10, window_size=window, shrinkage=True)
             model.fit(np.take(X, train_idx), np.take(y, train_idx))
             y_pred = model.predict(np.take(X, val_idx))
             score.append(utils.score(y_pred, np.take(y, val_idx)))
-            print("iteration n°{} for n_neighbors={} gave score:{}".format(count, n_neighbor, score[-1]))
-            count += 1
-        print("mean accuracy score for n:{} = {}".format(n_neighbor, np.array(score).mean()))
+        print("mean accuracy score for n:{} = {}".format(window, np.array(score).mean()))
