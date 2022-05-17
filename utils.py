@@ -5,7 +5,8 @@
 import numpy as np
 
 # Read specific filename from specified domain
-import scipy.signal as signal
+import scipy.interpolate as interp
+
 
 def read_files(domain):
     X = []
@@ -44,12 +45,28 @@ def train_test_split(X, y):
 
 
 # Resampling function
-def resampling(X, n_new):
-    X_res = np.zeros(shape=(n_new, 4))
-    X_res[:, 3] = np.linspace(X[3].min(), X[3].max(), n_new)
-    for i in range(3):
-        X_res[:, i] = signal.resample(X[:, i], n_new).T
-    return X_res
+def resample(X, n_new=64):
+    n_old, m = X.shape
+    mat_new = np.zeros((n_new, m))
+    x_old = np.asarray(X[:, 3]).squeeze()
+    x_new = np.linspace(X[:, 3].min(), X[:, 3].max(), n_new)
+
+    for j in range(m - 1):
+        y_old = np.asarray(X[:, j]).squeeze()
+        interpolator = interp.interp1d(x_old, y_old)
+        y_new = interpolator(x_new)
+        mat_new[:, j] = y_new
+    mat_new[:, -1] = x_new
+    return mat_new
+
+
+def score(y_pred, y_true):
+    count = 0
+    for i in range(len(y_pred)):
+        if y_true[i] == y_pred[i]:
+            count += 1
+    return count / len(y_pred)
+
 
 # Leave-One-Out Cross-Validation
 class LeaveOneOut:
